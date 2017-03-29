@@ -1,90 +1,131 @@
-import sys
-import time
-import telepot
+import logging
 import requests
-from telepot.namedtuple import InlineKeyboardMarkup, InlineKeyboardButton
+import json
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Updater, CommandHandler, CallbackQueryHandler
+
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+                    level=logging.INFO)
 
 def get_headers():
     api_token = '5661234332'
     header = {'Content-Type': 'application/json', 'Token': api_token}
     return header
 
-def handle(msg):
-    content_type, chat_type, chat_id = telepot.glance(msg)
+def event_list(bot, update):
+    r = requests.get(url = 'http://api.events.nesterione.com/api/v0.1/events', headers = get_headers())
 
-    if msg['text'] == '/events':
-        r = requests.get(url = 'http://api.events.nesterione.com/api/v0.1/events', 
-            headers = get_headers())
-        for event in r.json():
-            print(event['title'])
-            keyboard = [InlineKeyboardButton("Option 1", callback_data='1')]
+    keyboard = []
+    for event in r.json():
+        keyboard.append([InlineKeyboardButton(event['title'], callback_data = event['_id'])])
 
-            reply_markup = InlineKeyboardMarkup(keyboard)
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    update.message.reply_text('Events:', reply_markup=reply_markup)
+
+def button(bot, update):
+    query = update.callback_query
+    words = query.data.split(":")
+    event_id = words[0]
+    
+    # attendee_id = -1
+
+    attendees_before = get_attendees(event_id)
+
+    if len(words) == 2:
+        command = words[-1]
+        user_name = query['from_user']['first_name']
+        data = {'name':user_name, 'notes':''}
+        attendee_id = -1
+
+        for attendee in attendees_before:
+            if 'name' in attendee and attendee['name'] == user_name:
+                attendee_id = attendee['id']
+
+        if command == 'add':
+            url = 'http://api.events.nesterione.com/api/v0.1/events/' + event_id + '/attendees'
+            r = requests.put(url, data = json.dumps(data), headers = get_headers())
+
+        elif command == 'del':
             
-            bot.sendMessage(chat_id, 'Запланированные ивенты:', reply_markup = reply_markup)
-def on_callback_query(msg):
-    query_id, from_id, query_data = telepot.glance(msg, flavor='callback_query')
-    print('Callback Query:', query_id, from_id, query_data)
+            url = 'http://api.events.nesterione.com/api/v0.1/events/' + event_id + '/attendees/' + str(attendee_id)
+            requests.delete(url, headers = get_headers())
+            keyboard = [[InlineKeyboardButton("Remove me!", callback_data = event_id + ':del')]] #!!!!!!!!!!!!!!
 
-    bot.answerCallbackQuery(query_id, text='Got it')
+    if attendee_id < 0:
+        keyboard = [[InlineKeyboardButton("Add me!", callback_data = event_id + ':add')]]
+    else:
+        keyboard = [[InlineKeyboardButton("Remove me!", callback_data = event_id + ':del')]]
 
-TOKEN = sys.argv[1]  # get token from command-line
+    attendees_after = get_attendees(event_id)
 
-bot = telepot.Bot(TOKEN)
-bot.message_loop(handle)
-print ('Listening ...')
-
-
-# Keep the program running.
-while 1:
-    time.sleep(10)
-
-# import logging
-# from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-# from telegram.ext import Updater, CommandHandler, CallbackQueryHandler
-
-# logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-#                     level=logging.INFO)
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    bot.editMessageText(text = '\n'.join('{}: {}'.format(i + 1, v['name']) for i, v in enumerate(attendees_after)),
+                        chat_id = query.message.chat_id,
+                        message_id = query.message.message_id,
+                        reply_markup = reply_markup)
 
 
-# def start(bot, update):
-#     keyboard = [[InlineKeyboardButton("Option 1", callback_data='1'),
-#                  InlineKeyboardButton("Option 2", callback_data='2')],
-
-#                 [InlineKeyboardButton("Option 3", callback_data='3')]]
-
-#     reply_markup = InlineKeyboardMarkup(keyboard)
-
-#     update.message.reply_text('Please choose:', reply_markup=reply_markup)
+def help(bot, update):
+    update.message.reply_text("Use /events to get list of events.")
 
 
-# def button(bot, update):
-#     query = update.callback_query
+def error(bot, update, error):
+    logging.warning('Update "%s" caused error "%s"' % (update, error))
 
-#     bot.editMessageText(text="Selected option: %s" % query.data,
-#                         chat_id=query.message.chat_id,
-#                         message_id=query.message.message_id)
+def get_attendees(event_id):
+    r = requests.get(url = 'http://api.events.nesterione.com/api/v0.1/events/' + event_id, headers = get_headers())
+    event_info = r.json()
+    print(event_info)
+    return event_info['attendees']
+
+updater = Updater("329092132:AAEJl4dlsv3rgZ8Q5OkrBLB0mTdCM7oyOzQ")
+
+updater.dispatcher.add_handler(CommandHandler('events', event_list))
+updater.dispatcher.add_handler(CallbackQueryHandler(button))
+updater.dispatcher.add_handler(CommandHandler('help', help))
+updater.dispatcher.add_error_handler(error)
+
+updater.start_polling()
+
+updater.idle()
 
 
-# def help(bot, update):
-#     update.message.reply_text("Use /start to test this bot.")
+def button(bot, update):
+    query = update.callback_query
+    words = query.data.split(":")
+    event_id = words[0]
+    keyboard = [[InlineKeyboardButton("Add me!", callback_data = event_id + ':add')]]
+    
+    # attendee_id = -1
 
+    attendees_before = get_attendees(event_id)
 
-# def error(bot, update, error):
-#     logging.warning('Update "%s" caused error "%s"' % (update, error))
+    if len(words) == 2:
+        command = words[-1]
+        user_name = query['from_user']['first_name']
+        data = {'name':user_name, 'notes':''}
+        attendee_id = -1
 
+        for attendee in attendees_before:
+            if 'name' in attendee and attendee['name'] == user_name:
+                attendee_id = attendee['id']
 
-# # Create the Updater and pass it your bot's token.
-# updater = Updater("TOKEN")
+        if command == 'add':
+            url = 'http://api.events.nesterione.com/api/v0.1/events/' + event_id + '/attendees'
+            r = requests.put(url, data = json.dumps(data), headers = get_headers())
 
-# updater.dispatcher.add_handler(CommandHandler('start', start))
-# updater.dispatcher.add_handler(CallbackQueryHandler(button))
-# updater.dispatcher.add_handler(CommandHandler('help', help))
-# updater.dispatcher.add_error_handler(error)
+        elif command == 'del':
+            
+            url = 'http://api.events.nesterione.com/api/v0.1/events/' + event_id + '/attendees/' + str(attendee_id)
+            requests.delete(url, headers = get_headers())
+            keyboard = [[InlineKeyboardButton("Remove me!", callback_data = event_id + ':del')]] #!!!!!!!!!!!!!!
 
-# # Start the Bot
-# updater.start_polling()
+    
+    
+    attendees_after = get_attendees(event_id)
 
-# # Run the bot until the user presses Ctrl-C or the process receives SIGINT,
-# # SIGTERM or SIGABRT
-# updater.idle()
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    bot.editMessageText(text = '\n'.join('{}: {}'.format(i + 1, v['name']) for i, v in enumerate(attendees_after)),
+                        chat_id = query.message.chat_id,
+                        message_id = query.message.message_id,
+                        reply_markup = reply_markup)
