@@ -1,6 +1,7 @@
 import logging
 import requests
 import json
+import constants
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Updater, CommandHandler, CallbackQueryHandler
 
@@ -24,42 +25,68 @@ def event_list(bot, update):
 
 def button(bot, update):
     query = update.callback_query
-    words = query.data.split(":")
+    words = query.data.split(constants.DATA_SEPARATOR)
     event_id = words[0]
-    keyboard = []
     user_name = query['from_user']['first_name']
     attendees = get_attendees(event_id)
-    attendee_id = -1
 
-    if attendees.size:
+    if len(attendees) > 0:
         for attendee in attendees:
             if attendee['name'] == user_name:
                 attendee_id = attendee['id']
+                command = constants.DELETE_COMMAND
+        if "attendee_id" not in locals():
+            command = constants.ADD_COMMAND
+    else:
+        command = constants.ADD_COMMAND
 
-
-    keyboard = [[InlineKeyboardButton("Add me!", callback_data = event_id + ':add')]]
-
-    if len(words) == 2:
-        command = words[-1]
-        data = {'name':user_name, 'notes':''}
-        attendee_id = get_attendee_id(attendees, user_name)
-
-        if command == 'add':
-            url = 'http://api.events.nesterione.com/api/v0.1/events/' + event_id + '/attendees'
-            r = requests.put(url, data = json.dumps(data), headers = get_headers())
-            keyboard = [[InlineKeyboardButton("Remove me!", callback_data = event_id + ':del')]]
-
-        elif command == 'del':
-            url = 'http://api.events.nesterione.com/api/v0.1/events/' + event_id + '/attendees/' + str(attendee_id)
-            requests.delete(url, headers = get_headers())
-
-        attendees = get_attendees(event_id)
+    callback_data = event_id + command
+    keyboard = [[InlineKeyboardButton(constants.KEYBOARD_TITLE[command], callback_data = callback_data)]]
 
     reply_markup = InlineKeyboardMarkup(keyboard)
     bot.editMessageText(text = '\n'.join('{}: {}'.format(i + 1, v['name']) for i, v in enumerate(attendees)),
                         chat_id = query.message.chat_id,
                         message_id = query.message.message_id,
                         reply_markup = reply_markup)
+
+
+# def button(bot, update):
+#     query = update.callback_query
+#     words = query.data.split(constants.DATA_SEPARATOR)
+#     event_id = words[0]
+#     keyboard = []
+#     user_name = query['from_user']['first_name']
+#     attendees = get_attendees(event_id)
+
+#     if attendees.size:
+#         for attendee in attendees:
+#             if attendee['name'] == user_name:
+#                 attendee_id = attendee['id']
+
+
+#     keyboard = [[InlineKeyboardButton("Add me!", callback_data = event_id + ':add')]]
+
+#     if len(words) == 2:
+#         command = words[-1]
+#         data = {'name':user_name, 'notes':''}
+#         attendee_id = get_attendee_id(attendees, user_name)
+
+#         if command == 'add':
+#             url = 'http://api.events.nesterione.com/api/v0.1/events/' + event_id + '/attendees'
+#             r = requests.put(url, data = json.dumps(data), headers = get_headers())
+#             keyboard = [[InlineKeyboardButton("Remove me!", callback_data = event_id + ':del')]]
+
+#         elif command == 'del':
+#             url = 'http://api.events.nesterione.com/api/v0.1/events/' + event_id + '/attendees/' + str(attendee_id)
+#             requests.delete(url, headers = get_headers())
+
+#         attendees = get_attendees(event_id)
+
+#     reply_markup = InlineKeyboardMarkup(keyboard)
+#     bot.editMessageText(text = '\n'.join('{}: {}'.format(i + 1, v['name']) for i, v in enumerate(attendees)),
+#                         chat_id = query.message.chat_id,
+#                         message_id = query.message.message_id,
+#                         reply_markup = reply_markup)
 
 def help(bot, update):
     update.message.reply_text("Use /events to get list of events.")
@@ -78,7 +105,7 @@ def get_attendee_id(attendees, user_name):
         if 'name' in attendee and attendee['name'] == user_name:
             return attendee['id']
 
-updater = Updater("329092132:AAEJl4dlsv3rgZ8Q5OkrBLB0mTdCM7oyOzQ")
+updater = Updater(constants.TOKEN)
 
 updater.dispatcher.add_handler(CommandHandler('events', event_list))
 updater.dispatcher.add_handler(CallbackQueryHandler(button))
