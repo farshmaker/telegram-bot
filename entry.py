@@ -59,10 +59,13 @@ def button(bot, update):
     keyboard = [[InlineKeyboardButton(constants.KEYBOARD_TITLE[command], callback_data = callback_data)]]
 
     reply_markup = InlineKeyboardMarkup(keyboard)
+    # print("chat id: " + str(query.message.chat_id), " message id: " + str(query.message.message_id), "query id: " + str(query.id))
     bot.editMessageText(text = '\n'.join('{}: {}'.format(i + 1, v['name']) for i, v in enumerate(attendees)),
                         chat_id = query.message.chat_id,
                         message_id = query.message.message_id,
                         reply_markup = reply_markup)
+    if len(words) == 2:
+        bot.answerCallbackQuery(query.id, text=constants.CALLBACK_ANSWER[command])
 
 def help(bot, update):
     update.message.reply_text("Use /events to get list of events.")

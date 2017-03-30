@@ -5,6 +5,11 @@ KEYBOARD_TITLE = {
 	":del" : "Remove me!"
 }
 
+CALLBACK_ANSWER = {
+	":add" : "Deleted",
+	":del" : "Added"
+}
+
 ADD_COMMAND = ":add"
 DELETE_COMMAND = ":del"
 DATA_SEPARATOR = ":"
