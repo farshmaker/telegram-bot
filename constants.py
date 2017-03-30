@@ -1,5 +1,3 @@
-from enum import Enum
-
 KEYBOARD_TITLE = {
 	":add" : "Add me!",
 	":del" : "Remove me!"
