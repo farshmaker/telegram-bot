@@ -26,44 +26,40 @@ def button(bot, update):
     query = update.callback_query
     words = query.data.split(":")
     event_id = words[0]
-    
-    # attendee_id = -1
+    keyboard = []
+    user_name = query['from_user']['first_name']
+    attendees = get_attendees(event_id)
+    attendee_id = -1
 
-    attendees_before = get_attendees(event_id)
+    if attendees.size:
+        for attendee in attendees:
+            if attendee['name'] == user_name:
+                attendee_id = attendee['id']
+
+
+    keyboard = [[InlineKeyboardButton("Add me!", callback_data = event_id + ':add')]]
 
     if len(words) == 2:
         command = words[-1]
-        user_name = query['from_user']['first_name']
         data = {'name':user_name, 'notes':''}
-        attendee_id = -1
-
-        for attendee in attendees_before:
-            if 'name' in attendee and attendee['name'] == user_name:
-                attendee_id = attendee['id']
+        attendee_id = get_attendee_id(attendees, user_name)
 
         if command == 'add':
             url = 'http://api.events.nesterione.com/api/v0.1/events/' + event_id + '/attendees'
             r = requests.put(url, data = json.dumps(data), headers = get_headers())
+            keyboard = [[InlineKeyboardButton("Remove me!", callback_data = event_id + ':del')]]
 
         elif command == 'del':
-            
             url = 'http://api.events.nesterione.com/api/v0.1/events/' + event_id + '/attendees/' + str(attendee_id)
             requests.delete(url, headers = get_headers())
-            keyboard = [[InlineKeyboardButton("Remove me!", callback_data = event_id + ':del')]] #!!!!!!!!!!!!!!
 
-    if attendee_id < 0:
-        keyboard = [[InlineKeyboardButton("Add me!", callback_data = event_id + ':add')]]
-    else:
-        keyboard = [[InlineKeyboardButton("Remove me!", callback_data = event_id + ':del')]]
-
-    attendees_after = get_attendees(event_id)
+        attendees = get_attendees(event_id)
 
     reply_markup = InlineKeyboardMarkup(keyboard)
-    bot.editMessageText(text = '\n'.join('{}: {}'.format(i + 1, v['name']) for i, v in enumerate(attendees_after)),
+    bot.editMessageText(text = '\n'.join('{}: {}'.format(i + 1, v['name']) for i, v in enumerate(attendees)),
                         chat_id = query.message.chat_id,
                         message_id = query.message.message_id,
                         reply_markup = reply_markup)
-
 
 def help(bot, update):
     update.message.reply_text("Use /events to get list of events.")
@@ -75,8 +71,12 @@ def error(bot, update, error):
 def get_attendees(event_id):
     r = requests.get(url = 'http://api.events.nesterione.com/api/v0.1/events/' + event_id, headers = get_headers())
     event_info = r.json()
-    print(event_info)
     return event_info['attendees']
+
+def get_attendee_id(attendees, user_name):
+    for attendee in attendees:
+        if 'name' in attendee and attendee['name'] == user_name:
+            return attendee['id']
 
 updater = Updater("329092132:AAEJl4dlsv3rgZ8Q5OkrBLB0mTdCM7oyOzQ")
 
@@ -88,44 +88,3 @@ updater.dispatcher.add_error_handler(error)
 updater.start_polling()
 
 updater.idle()
-
-
-def button(bot, update):
-    query = update.callback_query
-    words = query.data.split(":")
-    event_id = words[0]
-    keyboard = [[InlineKeyboardButton("Add me!", callback_data = event_id + ':add')]]
-    
-    # attendee_id = -1
-
-    attendees_before = get_attendees(event_id)
-
-    if len(words) == 2:
-        command = words[-1]
-        user_name = query['from_user']['first_name']
-        data = {'name':user_name, 'notes':''}
-        attendee_id = -1
-
-        for attendee in attendees_before:
-            if 'name' in attendee and attendee['name'] == user_name:
-                attendee_id = attendee['id']
-
-        if command == 'add':
-            url = 'http://api.events.nesterione.com/api/v0.1/events/' + event_id + '/attendees'
-            r = requests.put(url, data = json.dumps(data), headers = get_headers())
-
-        elif command == 'del':
-            
-            url = 'http://api.events.nesterione.com/api/v0.1/events/' + event_id + '/attendees/' + str(attendee_id)
-            requests.delete(url, headers = get_headers())
-            keyboard = [[InlineKeyboardButton("Remove me!", callback_data = event_id + ':del')]] #!!!!!!!!!!!!!!
-
-    
-    
-    attendees_after = get_attendees(event_id)
-
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    bot.editMessageText(text = '\n'.join('{}: {}'.format(i + 1, v['name']) for i, v in enumerate(attendees_after)),
-                        chat_id = query.message.chat_id,
-                        message_id = query.message.message_id,
-                        reply_markup = reply_markup)
