@@ -30,6 +30,8 @@ def button(bot, update):
     user_name = query['from_user']['first_name']
     attendees = get_attendees(event_id)
 
+    logging.info(user_name)
+
     if len(attendees) > 0:
         for attendee in attendees:
             if attendee['name'] == user_name:
@@ -39,7 +41,6 @@ def button(bot, update):
             command = constants.ADD_COMMAND
     else:
         command = constants.ADD_COMMAND
-
     if len(words) == 2:
         data = {'name':user_name, 'notes':''}
 
@@ -59,7 +60,13 @@ def button(bot, update):
     keyboard = [[InlineKeyboardButton(constants.KEYBOARD_TITLE[command], callback_data = callback_data)]]
 
     reply_markup = InlineKeyboardMarkup(keyboard)
-    bot.editMessageText(text = '\n'.join('{}: {}'.format(i + 1, v['name']) for i, v in enumerate(attendees)),
+
+    if len(attendees) > 0:
+        text = '\n'.join('{}: {}'.format(i + 1, v['name']) for i, v in enumerate(attendees))
+    else:
+        text = "There is no attendees:("
+
+    bot.editMessageText(text = text,
                         chat_id = query.message.chat_id,
                         message_id = query.message.message_id,
                         reply_markup = reply_markup)
